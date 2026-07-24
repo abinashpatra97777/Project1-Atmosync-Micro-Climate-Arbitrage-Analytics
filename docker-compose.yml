@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: atmosync-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: atmosync-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+  # Optional: a simple web UI to see Kafka topics and messages visually.
+  # Very useful for your demo/screenshots for the internship submission.
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: atmosync-kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+
+  superset:
+    image: apache/superset:latest
+    container_name: atmosync-superset
+    user: root
+    ports:
+      - "8088:8088"
+    environment:
+      - SUPERSET_SECRET_KEY=atmosync_super_secret_key_12345
+    command: >
+      /bin/sh -c "
+      pip install --no-deps --target=/app/.venv/lib/python3.10/site-packages snowflake-connector-python snowflake-sqlalchemy asn1crypto boto3 botocore certifi cffi charset-normalizer cryptography filelock idna jmespath packaging platformdirs pyOpenSSL pycparser pyjwt python-dateutil pytz requests s3transfer six sortedcontainers tomlkit typing_extensions urllib3 &&
+      superset db upgrade &&
+      superset fab create-admin --username admin --firstname Admin --lastname User --email admin@admin.com --password admin &&
+      superset init &&
+      superset run -h 0.0.0.0 -p 8088
+      "
